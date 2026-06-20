@@ -72,6 +72,7 @@ Um site (que abre no celular) onde o entregador:
 
 - [x] **Etapa 1** — Estrutura do projeto + documentação
 - [x] **Etapa 2** — Versão funcional: digitar endereços → otimizar ordem → gerar link do Maps
+- [x] **Etapa 2.1** — Salvar a lista no navegador (localStorage) + botão "Limpar lista"
 - [ ] **Etapa 3** — Ler endereço a partir da foto da etiqueta (OCR)
 - [ ] **Etapa 4 (opcional)** — Botão "espiar no Street View" + alerta de complemento ausente
 

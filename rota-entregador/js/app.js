@@ -21,6 +21,9 @@ const CONFIG = {
 
   // Pausa entre buscas de endereço (Nominatim pede no máx. 1 por segundo).
   pausaGeocodificacaoMs: 1100,
+
+  // Nome da "gaveta" onde guardamos os dados no navegador (localStorage).
+  chaveStorage: "rotaEsperta.v1",
 };
 
 // -----------------------------------------------------------
@@ -48,12 +51,64 @@ function adicionarEntrega(endereco, complemento) {
     lat: null,
     lng: null,
   });
+  salvarEstado();
   renderizarLista();
 }
 
 function removerEntrega(id) {
   estado.entregas = estado.entregas.filter((e) => e.id !== id);
+  salvarEstado();
   renderizarLista();
+}
+
+function limparTudo() {
+  estado.entregas = [];
+  estado.proximoId = 1;
+  salvarEstado();
+  renderizarLista();
+  el("cartao-resultado").hidden = true;
+}
+
+// -----------------------------------------------------------
+// PERSISTÊNCIA — guarda os dados no navegador (localStorage),
+// para a lista não sumir ao recarregar ou fechar a página.
+// -----------------------------------------------------------
+function salvarEstado() {
+  try {
+    const dados = {
+      entregas: estado.entregas,
+      proximoId: estado.proximoId,
+      lanchonete: el("input-lanchonete").value,
+      cidade: el("input-cidade").value,
+    };
+    localStorage.setItem(CONFIG.chaveStorage, JSON.stringify(dados));
+  } catch (e) {
+    // Navegação privada pode bloquear o localStorage — segue sem salvar.
+  }
+}
+
+function carregarEstado() {
+  try {
+    const bruto = localStorage.getItem(CONFIG.chaveStorage);
+    if (!bruto) return;
+    const dados = JSON.parse(bruto);
+
+    // Recarrega as entregas, mas zera as coordenadas: elas serão
+    // recalculadas na próxima otimização (evita usar localização velha).
+    estado.entregas = (dados.entregas || []).map((e) => ({
+      id: e.id,
+      endereco: e.endereco,
+      complemento: e.complemento || "",
+      lat: null,
+      lng: null,
+    }));
+    estado.proximoId = dados.proximoId || estado.entregas.length + 1;
+
+    if (dados.lanchonete) el("input-lanchonete").value = dados.lanchonete;
+    if (dados.cidade) el("input-cidade").value = dados.cidade;
+  } catch (e) {
+    // Dados corrompidos — ignora e começa do zero.
+  }
 }
 
 function renderizarLista() {
@@ -309,6 +364,12 @@ async function otimizar() {
     }
 
     // 2) Geocodificar cada entrega (uma por vez, respeitando o limite)
+    // Zera as coordenadas antes, para sempre recalcular do zero.
+    estado.entregas.forEach((e) => {
+      e.lat = null;
+      e.lng = null;
+      e.aproximado = false;
+    });
     const naoEncontrados = [];
     for (let i = 0; i < estado.entregas.length; i++) {
       const entrega = estado.entregas[i];
@@ -417,7 +478,22 @@ function iniciar() {
   // Botão otimizar
   el("btn-otimizar").addEventListener("click", otimizar);
 
-  console.log("Rota Esperta — Etapa 2 carregada ✅");
+  // Botão limpar lista
+  el("btn-limpar").addEventListener("click", () => {
+    if (estado.entregas.length === 0) return;
+    if (confirm("Apagar todas as entregas da lista?")) limparTudo();
+  });
+
+  // Salva a lanchonete e a cidade conforme o usuário digita
+  ["input-lanchonete", "input-cidade"].forEach((id) => {
+    el(id).addEventListener("input", salvarEstado);
+  });
+
+  // Recupera os dados salvos da última vez e mostra a lista
+  carregarEstado();
+  renderizarLista();
+
+  console.log("Rota Esperta — Etapa 2.1 carregada ✅");
 }
 
 iniciar();
