@@ -163,32 +163,77 @@ function mostrarOcrStatus(texto, ehErro = false) {
   s.classList.toggle("erro", ehErro);
 }
 
-// Tenta achar o endereço dentro do texto bruto lido da foto.
-// É uma heurística simples: vamos refiná-la com fotos reais.
+// Extrai o endereço do texto lido. Os cupons (iFood/Cardápio Web) têm um
+// bloco fixo começando em "ENDEREÇO PARA ENTREGA:", então usamos essa
+// estrutura. Retorna { endereco, complemento, aviso }.
 function extrairEndereco(textoBruto) {
   const linhas = textoBruto
     .split(/\n+/)
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // Palavras que indicam o início de um logradouro
-  const regexRua = /\b(rua|r\.|av\.?|avenida|travessa|tv\.?|alameda|al\.?|estrada|rod\.?|rodovia|pra[cç]a|p[cç]\.?)\b/i;
-
-  const idxRua = linhas.findIndex((l) => regexRua.test(l));
-  if (idxRua === -1) return null; // não achamos nenhuma rua
-
-  const partes = [linhas[idxRua]];
-
-  // Se a linha da rua não tiver número, tenta pegar um número na linha seguinte
-  if (!/\d/.test(linhas[idxRua]) && linhas[idxRua + 1] && /\d/.test(linhas[idxRua + 1])) {
-    partes.push(linhas[idxRua + 1]);
+  // Procura o cabeçalho do bloco de entrega
+  const idxCab = linhas.findIndex((l) => /para\s+entrega/i.test(l));
+  if (idxCab === -1) {
+    return extrairPorPalavraChave(linhas, textoBruto); // plano B
   }
 
-  // Procura um CEP (formato 00000-000) em qualquer lugar do texto
+  let rua = "";
+  const complemento = [];
+  let bairroCidade = "";
+
+  for (let i = idxCab + 1; i < linhas.length; i++) {
+    const linha = linhas[i];
+    if (/previs[aã]o/i.test(linha)) break;                 // fim do bloco
+    if (!rua) {
+      rua = linha;                                          // 1ª linha = rua + número
+      continue;
+    }
+    if (/\s[-–]\s/.test(linha) && !/^comp/i.test(linha)) {
+      bairroCidade = linha;                                 // "Bairro - Cidade"
+      break;
+    }
+    complemento.push(linha.replace(/^comp\s*:\s*/i, ""));   // "Comp: ..." vira complemento
+  }
+
+  if (!rua) return extrairPorPalavraChave(linhas, textoBruto);
+
+  // Monta o endereço para o mapa: rua, número + bairro, cidade
+  let endereco = rua;
+  if (bairroCidade) {
+    endereco += ", " + bairroCidade.replace(/\s[-–]\s/, ", ");
+  }
+
+  // Detecta número da casa ausente ou inválido (ex.: ", 0")
+  let aviso = "";
+  const numero = rua.match(/,\s*(\d+)\b/);
+  if (!numero) {
+    aviso = "Não identifiquei o número da casa — confirme com o cliente.";
+  } else if (numero[1] === "0") {
+    aviso = "O número da casa veio como 0 (provavelmente faltando) — confirme com o cliente.";
+  }
+
+  return {
+    endereco: endereco.trim(),
+    complemento: complemento.join(" ").trim(),
+    aviso,
+  };
+}
+
+// Plano B: sem o cabeçalho padrão, procura uma linha que pareça logradouro.
+function extrairPorPalavraChave(linhas, textoBruto) {
+  const regexRua = /\b(rua|r\.|av\.?|avenida|travessa|tv\.?|alameda|al\.?|estrada|rod\.?|rodovia|pra[cç]a|p[cç]\.?)\b/i;
+  const idx = linhas.findIndex((l) => regexRua.test(l));
+  if (idx === -1) return null;
+
+  const partes = [linhas[idx]];
+  if (!/\d/.test(linhas[idx]) && linhas[idx + 1] && /\d/.test(linhas[idx + 1])) {
+    partes.push(linhas[idx + 1]);
+  }
   const cep = textoBruto.match(/\d{5}-?\d{3}/);
   if (cep) partes.push(cep[0]);
 
-  return partes.join(", ");
+  return { endereco: partes.join(", "), complemento: "", aviso: "" };
 }
 
 async function lerFoto(arquivo) {
@@ -217,11 +262,17 @@ async function lerFoto(arquivo) {
     el("ocr-bruto").textContent = texto || "(nada reconhecido)";
     el("ocr-bruto-box").hidden = false;
 
-    const endereco = extrairEndereco(texto);
-    if (endereco) {
-      el("input-endereco").value = endereco;
+    const extraido = extrairEndereco(texto);
+    if (extraido && extraido.endereco) {
+      el("input-endereco").value = extraido.endereco;
+      if (extraido.complemento) el("input-complemento").value = extraido.complemento;
       el("input-endereco").focus();
-      mostrarOcrStatus('✅ Endereço lido! Confira/ajuste e clique em "Adicionar à lista".');
+
+      if (extraido.aviso) {
+        mostrarOcrStatus('⚠️ ' + extraido.aviso + ' Ajuste e clique em "Adicionar à lista".', true);
+      } else {
+        mostrarOcrStatus('✅ Endereço lido! Confira/ajuste e clique em "Adicionar à lista".');
+      }
     } else {
       mostrarOcrStatus("⚠️ Não identifiquei o endereço sozinho. Veja o texto lido abaixo e preencha à mão.", true);
     }
