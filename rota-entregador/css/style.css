@@ -1,0 +1,106 @@
+/* ===========================================================
+   Rota Esperta — estilo (mobile-first)
+   "mobile-first" = pensado primeiro para a tela do celular
+   =========================================================== */
+
+/* Reset básico: tira margens/paddings padrão e facilita o tamanho */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Paleta de cores em um lugar só — fácil de mudar depois */
+  --cor-principal: #ff6b35;   /* laranja (energia, entrega) */
+  --cor-escura: #1a1a2e;
+  --cor-clara: #f7f7f9;
+  --cor-texto: #2d2d3a;
+  --cor-suave: #6b6b7b;
+  --raio: 14px;
+}
+
+body {
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--cor-clara);
+  color: var(--cor-texto);
+  line-height: 1.5;
+  /* Centraliza o conteúdo e limita a largura em telas grandes */
+  max-width: 640px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  background: var(--cor-escura);
+  color: #fff;
+  text-align: center;
+  padding: 28px 20px;
+}
+
+.cabecalho h1 {
+  font-size: 1.8rem;
+}
+
+.subtitulo {
+  color: #b8b8c8;
+  font-size: 0.95rem;
+  margin-top: 4px;
+}
+
+/* ---------- Conteúdo ---------- */
+.conteudo {
+  padding: 20px;
+}
+
+.aviso {
+  background: #fff4e6;
+  border-left: 4px solid var(--cor-principal);
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 22px;
+}
+
+/* ---------- Lista do fluxo ---------- */
+.fluxo {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.passo {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #fff;
+  padding: 18px;
+  border-radius: var(--raio);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.passo-icone {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+
+.passo h2 {
+  font-size: 1.1rem;
+  color: var(--cor-escura);
+  margin-bottom: 2px;
+}
+
+.passo p {
+  font-size: 0.9rem;
+  color: var(--cor-suave);
+}
+
+/* ---------- Rodapé ---------- */
+.rodape {
+  text-align: center;
+  padding: 24px;
+  color: var(--cor-suave);
+  font-size: 0.8rem;
+}

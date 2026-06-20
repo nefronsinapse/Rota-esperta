@@ -1,0 +1,20 @@
+# ===========================================================
+# .gitignore — diz ao Git quais arquivos ele deve IGNORAR
+# (ignorar = não rastrear, não some do seu computador)
+# ===========================================================
+
+# Arquivos que já existiam na pasta e não fazem parte deste projeto
+# (skills, materiais, zips). Ficam guardados no seu PC, mas fora do Git.
+*.skill
+*.zip
+SKILL.md
+Transcri*_Prova.md
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Pastas de dependências / temporários (úteis no futuro)
+node_modules/
+*.log
