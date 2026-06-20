@@ -217,19 +217,22 @@ function extrairEndereco(textoBruto) {
       break;
     }
   }
-  // Reserva: se o OCR perdeu o "-", usa a última linha do bloco (desde que
-  // não seja a rua nem um "Comp:") como bairro/cidade.
+  // Reserva: se o OCR perdeu o "-", usa a última linha do bloco como
+  // bairro/cidade — desde que não seja a rua, não seja um "Comp:" e tenha
+  // letras suficientes (evita lixo mutilado tipo "A," virar bairro).
   if (!bairroLinha && bloco.length >= 2) {
     const ultima = bloco[bloco.length - 1];
-    if (!/^comp/i.test(ultima)) bairroLinha = ultima;
+    const letras = (limpar(ultima).match(/[a-zà-ú]/gi) || []).length;
+    if (!/^comp/i.test(ultima) && letras >= 4) bairroLinha = ultima;
   }
   const bairroCidade = bairroLinha ? limpar(bairroLinha).replace(/\s[-–]\s/, ", ") : "";
 
-  // Complemento: as demais linhas do bloco (fora a rua e o bairro)
+  // Complemento: as demais linhas do bloco (fora a rua e o bairro).
+  // Descarta pedaços curtos demais (lixo de OCR como "A").
   const complemento = bloco
     .filter((l, idx) => idx !== 0 && l !== bairroLinha)
     .map((l) => limpar(l.replace(/^comp\s*:?\s*/i, "")))
-    .filter(Boolean)
+    .filter((l) => l.length >= 3)
     .join(" ");
 
   if (!rua) return extrairPorPalavraChave(linhas, textoBruto);
