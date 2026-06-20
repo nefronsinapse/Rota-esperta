@@ -3,7 +3,6 @@
    "mobile-first" = pensado primeiro para a tela do celular
    =========================================================== */
 
-/* Reset básico: tira margens/paddings padrão e facilita o tamanho */
 * {
   margin: 0;
   padding: 0;
@@ -11,12 +10,13 @@
 }
 
 :root {
-  /* Paleta de cores em um lugar só — fácil de mudar depois */
   --cor-principal: #ff6b35;   /* laranja (energia, entrega) */
   --cor-escura: #1a1a2e;
   --cor-clara: #f7f7f9;
   --cor-texto: #2d2d3a;
   --cor-suave: #6b6b7b;
+  --cor-aviso: #e8a317;
+  --cor-sucesso: #2e9e5b;
   --raio: 14px;
 }
 
@@ -25,7 +25,6 @@ body {
   background: var(--cor-clara);
   color: var(--cor-texto);
   line-height: 1.5;
-  /* Centraliza o conteúdo e limita a largura em telas grandes */
   max-width: 640px;
   margin: 0 auto;
   min-height: 100vh;
@@ -36,65 +35,217 @@ body {
   background: var(--cor-escura);
   color: #fff;
   text-align: center;
-  padding: 28px 20px;
+  padding: 24px 20px;
 }
 
-.cabecalho h1 {
-  font-size: 1.8rem;
-}
+.cabecalho h1 { font-size: 1.7rem; }
 
 .subtitulo {
   color: #b8b8c8;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   margin-top: 4px;
 }
 
 /* ---------- Conteúdo ---------- */
-.conteudo {
-  padding: 20px;
-}
+.conteudo { padding: 16px; }
 
-.aviso {
-  background: #fff4e6;
-  border-left: 4px solid var(--cor-principal);
-  padding: 14px 16px;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  margin-bottom: 22px;
-}
-
-/* ---------- Lista do fluxo ---------- */
-.fluxo {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.passo {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+/* ---------- Cartões ---------- */
+.cartao {
   background: #fff;
   padding: 18px;
   border-radius: var(--raio);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 16px;
 }
 
-.passo-icone {
-  font-size: 1.8rem;
+.cartao h2 {
+  font-size: 1.1rem;
+  color: var(--cor-escura);
+  margin-bottom: 12px;
+}
+
+/* ---------- Formulário ---------- */
+label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 10px 0 4px;
+  color: var(--cor-texto);
+}
+
+.opcional {
+  font-weight: 400;
+  color: var(--cor-suave);
+  font-size: 0.8rem;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid #d8d8e0;
+  border-radius: 10px;
+  background: #fbfbfd;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: var(--cor-principal);
+  background: #fff;
+}
+
+.dica {
+  font-size: 0.82rem;
+  color: var(--cor-suave);
+  margin-top: 10px;
+}
+
+/* ---------- Botões ---------- */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+  margin-top: 14px;
+  transition: transform 0.05s ease, opacity 0.2s ease;
+}
+
+.btn:active { transform: scale(0.99); }
+
+.btn-principal {
+  background: var(--cor-principal);
+  color: #fff;
+}
+
+.btn-secundario {
+  background: #ececf2;
+  color: var(--cor-escura);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- Lista de entregas ---------- */
+.lista-entregas {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-entrega {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #eaeaf0;
+  border-radius: 10px;
+  background: #fbfbfd;
+}
+
+.item-numero {
+  font-weight: 700;
+  color: var(--cor-suave);
   flex-shrink: 0;
 }
 
-.passo h2 {
-  font-size: 1.1rem;
-  color: var(--cor-escura);
-  margin-bottom: 2px;
+.item-corpo { flex: 1; min-width: 0; }
+
+.item-endereco { font-size: 0.92rem; }
+
+.item-complemento {
+  font-size: 0.8rem;
+  color: var(--cor-suave);
+  margin-top: 2px;
 }
 
-.passo p {
+.sem-complemento {
+  font-size: 0.8rem;
+  color: var(--cor-aviso);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.badge-prioridade {
+  display: inline-block;
+  background: #fff0e8;
+  color: var(--cor-principal);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-top: 4px;
+}
+
+.btn-remover {
+  background: none;
+  border: none;
+  color: #c44;
+  font-size: 1.2rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* ---------- Status ---------- */
+.status {
+  text-align: center;
+  padding: 12px;
+  border-radius: 10px;
   font-size: 0.9rem;
+  margin-bottom: 16px;
+  background: #eef3ff;
+  color: #34508a;
+}
+
+.status.erro { background: #fdecec; color: #b33; }
+
+/* ---------- Resultado ---------- */
+.resumo {
+  font-size: 0.9rem;
+  background: #eafaf0;
+  color: #1f6e42;
+  padding: 10px 12px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.resultado-ordem {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.resultado-ordem li {
+  font-size: 0.92rem;
+  padding-left: 4px;
+}
+
+.resultado-ordem .compl {
+  display: block;
+  font-size: 0.8rem;
   color: var(--cor-suave);
+}
+
+.tag-prio {
+  display: inline-block;
+  background: var(--cor-principal);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+  margin-left: 6px;
 }
 
 /* ---------- Rodapé ---------- */

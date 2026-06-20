@@ -70,8 +70,8 @@ Um site (que abre no celular) onde o entregador:
 
 ## 🗺️ Roadmap (etapas de construção)
 
-- [x] **Etapa 1** — Estrutura do projeto + documentação *(este commit)*
-- [ ] **Etapa 2** — Versão funcional: digitar endereços → otimizar ordem → gerar link do Maps
+- [x] **Etapa 1** — Estrutura do projeto + documentação
+- [x] **Etapa 2** — Versão funcional: digitar endereços → otimizar ordem → gerar link do Maps
 - [ ] **Etapa 3** — Ler endereço a partir da foto da etiqueta (OCR)
 - [ ] **Etapa 4 (opcional)** — Botão "espiar no Street View" + alerta de complemento ausente
 
