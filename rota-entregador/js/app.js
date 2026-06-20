@@ -197,9 +197,9 @@ function extrairEndereco(textoBruto) {
   const limpar = (l) =>
     l
       .replace(/\s*(r\$|itens\s*do\s*pedido|entrega\s*pr|valor\s*unit|previs|revis[aã]o).*$/i, "")
-      .replace(/[;|]+/g, " ")
+      .replace(/["'\[\]{}()\\/|]+/g, " ")          // tira aspas, colchetes, parênteses, barras
       .replace(/\s{2,}/g, " ")
-      .replace(/^[\s,.\-]+|[\s,.\-]+$/g, "")
+      .replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g, "")    // tira pontuação solta nas pontas
       .trim();
 
   const rua = limpar(bloco[0]); // 1ª linha = rua + número
@@ -211,6 +211,12 @@ function extrairEndereco(textoBruto) {
       bairroLinha = bloco[i];
       break;
     }
+  }
+  // Reserva: se o OCR perdeu o "-", usa a última linha do bloco (desde que
+  // não seja a rua nem um "Comp:") como bairro/cidade.
+  if (!bairroLinha && bloco.length >= 2) {
+    const ultima = bloco[bloco.length - 1];
+    if (!/^comp/i.test(ultima)) bairroLinha = ultima;
   }
   const bairroCidade = bairroLinha ? limpar(bairroLinha).replace(/\s[-–]\s/, ", ") : "";
 
