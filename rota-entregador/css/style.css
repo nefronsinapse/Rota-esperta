@@ -209,6 +209,16 @@ input[type="text"]:focus {
 .status.erro { background: #fdecec; color: #b33; }
 
 /* ---------- Resultado ---------- */
+.aviso-drops {
+  background: #fdecec;
+  color: #b33;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
 .resumo {
   font-size: 0.9rem;
   background: #eafaf0;

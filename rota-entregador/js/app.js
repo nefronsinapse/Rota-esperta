@@ -105,28 +105,60 @@ function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function geocodificar(endereco, cidade) {
-  // Junta a cidade base ao endereço, se ela não estiver já escrita
-  let consulta = endereco;
-  if (cidade && !endereco.toLowerCase().includes(cidade.toLowerCase())) {
-    consulta += ", " + cidade;
-  }
-
+// Faz UMA busca no Nominatim. Se levar uma "freada" por excesso de buscas
+// (códigos 429/503) ou der um erro de rede pontual, espera e tenta de novo.
+async function buscarNominatim(consulta) {
   const url =
     "https://nominatim.openstreetmap.org/search?format=json&limit=1" +
     "&countrycodes=" + CONFIG.pais +
     "&q=" + encodeURIComponent(consulta);
 
-  const resposta = await fetch(url, { headers: { "Accept-Language": "pt-BR" } });
-  if (!resposta.ok) throw new Error("Falha ao consultar o mapa");
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    try {
+      const resposta = await fetch(url, { headers: { "Accept-Language": "pt-BR" } });
+      if (resposta.status === 429 || resposta.status === 503) {
+        await esperar(1500); // "calma, muitas buscas" — espera e repete
+        continue;
+      }
+      if (!resposta.ok) return null;
+      const dados = await resposta.json();
+      if (!dados.length) return null;
+      return { lat: parseFloat(dados[0].lat), lng: parseFloat(dados[0].lon) };
+    } catch (e) {
+      await esperar(800); // erro de rede pontual: respira e tenta mais uma vez
+    }
+  }
+  return null;
+}
 
-  const dados = await resposta.json();
-  if (!dados.length) return null; // endereço não encontrado
+// Geocodifica um endereço (acha lat/lng). Se não encontrar com o número
+// exato da casa, tenta de novo só com a rua + cidade — melhor um ponto na
+// rua certa do que perder a parada inteira.
+async function geocodificar(endereco, cidade) {
+  const montar = (texto) =>
+    cidade && !texto.toLowerCase().includes(cidade.toLowerCase())
+      ? texto + ", " + cidade
+      : texto;
 
-  return {
-    lat: parseFloat(dados[0].lat),
-    lng: parseFloat(dados[0].lon),
-  };
+  // Tentativa 1: endereço completo
+  let resultado = await buscarNominatim(montar(endereco));
+  if (resultado) return resultado;
+
+  // Tentativa 2 (reserva): remove o número da casa e busca a rua
+  const semNumero = endereco
+    .replace(/\b\d+\b/g, "")     // tira números soltos (o nº da casa)
+    .replace(/\s*,\s*,/g, ",")   // limpa vírgulas duplicadas
+    .replace(/\s{2,}/g, " ")     // limpa espaços extras
+    .replace(/^[\s,]+|[\s,]+$/g, "") // tira vírgulas/espaços nas pontas
+    .trim();
+
+  if (semNumero && semNumero.toLowerCase() !== endereco.toLowerCase()) {
+    await esperar(CONFIG.pausaGeocodificacaoMs);
+    resultado = await buscarNominatim(montar(semNumero));
+    if (resultado) return { ...resultado, aproximado: true };
+  }
+
+  return null;
 }
 
 // =====================================================================
@@ -286,6 +318,7 @@ async function otimizar() {
       if (coord) {
         entrega.lat = coord.lat;
         entrega.lng = coord.lng;
+        entrega.aproximado = !!coord.aproximado;
       } else {
         naoEncontrados.push(entrega.endereco);
       }
@@ -337,16 +370,27 @@ function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados
     const compl = entrega.complemento
       ? `<span class="compl">📝 ${entrega.complemento}</span>`
       : `<span class="compl">⚠️ sem complemento</span>`;
-    li.innerHTML = `${entrega.endereco}${tag}${compl}`;
+    const aprox = entrega.aproximado
+      ? `<span class="compl">📍 local aproximado (rua, sem o número exato)</span>`
+      : "";
+    li.innerHTML = `${entrega.endereco}${tag}${compl}${aprox}`;
     ol.appendChild(li);
   });
 
   // Link do Maps
   el("link-maps").href = gerarLinkDoMaps(origem, rota);
 
-  // Aviso de endereços não encontrados (se houver)
+  // Aviso PERSISTENTE de endereços não localizados (fica dentro do resultado)
+  const aviso = el("aviso-drops");
   if (naoEncontrados.length) {
-    mostrarStatus("⚠️ Não localizei: " + naoEncontrados.join("; ") + ". Eles ficaram de fora.", true);
+    aviso.innerHTML =
+      `⚠️ <strong>${naoEncontrados.length} endereço(s) não localizado(s)</strong> — ` +
+      "ficaram de fora da rota:<br>• " +
+      naoEncontrados.join("<br>• ") +
+      "<br><br>Confira a escrita (rua, número, bairro) e a cidade base, depois otimize de novo.";
+    aviso.hidden = false;
+  } else {
+    aviso.hidden = true;
   }
 
   el("cartao-resultado").hidden = false;
