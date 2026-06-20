@@ -178,46 +178,64 @@ function extrairEndereco(textoBruto) {
     return extrairPorPalavraChave(linhas, textoBruto); // plano B
   }
 
-  let rua = "";
-  const complemento = [];
-  let bairroCidade = "";
+  // Marcadores que indicam o FIM do bloco de endereço. São tolerantes a
+  // erros do OCR (ex.: "Previsão" pode virar "revisão"). Se a linha bater
+  // em qualquer um deles, paramos de ler o endereço ali.
+  const ehFimDoBloco = (l) =>
+    /previs|revis[aã]o|entrega\s*pr|itens\s*do\s*pedido|valor\s*unit|^\s*qtd\b|pedido\s*n|r\$/i.test(l);
 
-  for (let i = idxCab + 1; i < linhas.length; i++) {
-    const linha = linhas[i];
-    if (/previs[aã]o/i.test(linha)) break;                 // fim do bloco
-    if (!rua) {
-      rua = linha;                                          // 1ª linha = rua + número
-      continue;
-    }
-    if (/\s[-–]\s/.test(linha) && !/^comp/i.test(linha)) {
-      bairroCidade = linha;                                 // "Bairro - Cidade"
+  // Coleta só as primeiras linhas após o cabeçalho (no máx. 5), parando no
+  // 1º marcador de fim — assim itens e valores do cupom não vazam.
+  const bloco = [];
+  for (let i = idxCab + 1; i < linhas.length && bloco.length < 5; i++) {
+    if (ehFimDoBloco(linhas[i])) break;
+    bloco.push(linhas[i]);
+  }
+  if (!bloco.length) return extrairPorPalavraChave(linhas, textoBruto);
+
+  // Limpa uma linha: corta restos de item/valor e tira pontuação solta.
+  const limpar = (l) =>
+    l
+      .replace(/\s*(r\$|itens\s*do\s*pedido|entrega\s*pr|valor\s*unit|previs|revis[aã]o).*$/i, "")
+      .replace(/[;|]+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^[\s,.\-]+|[\s,.\-]+$/g, "")
+      .trim();
+
+  const rua = limpar(bloco[0]); // 1ª linha = rua + número
+
+  // Bairro - Cidade: a última linha do bloco que tenha " - " (e não seja Comp)
+  let bairroLinha = "";
+  for (let i = bloco.length - 1; i >= 1; i--) {
+    if (/\s[-–]\s/.test(bloco[i]) && !/^comp/i.test(bloco[i])) {
+      bairroLinha = bloco[i];
       break;
     }
-    complemento.push(linha.replace(/^comp\s*:\s*/i, ""));   // "Comp: ..." vira complemento
   }
+  const bairroCidade = bairroLinha ? limpar(bairroLinha).replace(/\s[-–]\s/, ", ") : "";
+
+  // Complemento: as demais linhas do bloco (fora a rua e o bairro)
+  const complemento = bloco
+    .filter((l, idx) => idx !== 0 && l !== bairroLinha)
+    .map((l) => limpar(l.replace(/^comp\s*:?\s*/i, "")))
+    .filter(Boolean)
+    .join(" ");
 
   if (!rua) return extrairPorPalavraChave(linhas, textoBruto);
 
-  // Monta o endereço para o mapa: rua, número + bairro, cidade
   let endereco = rua;
-  if (bairroCidade) {
-    endereco += ", " + bairroCidade.replace(/\s[-–]\s/, ", ");
-  }
+  if (bairroCidade) endereco += ", " + bairroCidade;
 
   // Detecta número da casa ausente ou inválido (ex.: ", 0")
   let aviso = "";
-  const numero = rua.match(/,\s*(\d+)\b/);
+  const numero = rua.match(/,\s*(\d+)\b/) || rua.match(/\b(\d+)\b\s*$/);
   if (!numero) {
     aviso = "Não identifiquei o número da casa — confirme com o cliente.";
   } else if (numero[1] === "0") {
     aviso = "O número da casa veio como 0 (provavelmente faltando) — confirme com o cliente.";
   }
 
-  return {
-    endereco: endereco.trim(),
-    complemento: complemento.join(" ").trim(),
-    aviso,
-  };
+  return { endereco: endereco.trim(), complemento, aviso };
 }
 
 // Plano B: sem o cabeçalho padrão, procura uma linha que pareça logradouro.
