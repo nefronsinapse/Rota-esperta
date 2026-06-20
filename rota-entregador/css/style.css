@@ -100,6 +100,67 @@ input[type="text"]:focus {
   margin-top: 10px;
 }
 
+/* ---------- Área de foto (OCR) ---------- */
+.btn-foto {
+  margin-top: 0;
+  display: block;
+}
+
+.ocr-status {
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 10px;
+  border-radius: 10px;
+  margin-top: 10px;
+  background: #eef3ff;
+  color: #34508a;
+}
+
+.ocr-status.erro { background: #fff4e6; color: #9a6a12; }
+
+#ocr-bruto-box {
+  margin-top: 10px;
+  font-size: 0.82rem;
+}
+
+#ocr-bruto-box summary {
+  cursor: pointer;
+  color: var(--cor-suave);
+}
+
+.ocr-bruto {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f4f4f7;
+  padding: 10px;
+  border-radius: 8px;
+  margin-top: 8px;
+  font-size: 0.8rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.ou-divisor {
+  text-align: center;
+  color: var(--cor-suave);
+  font-size: 0.8rem;
+  margin: 16px 0 4px;
+  position: relative;
+}
+
+.ou-divisor::before,
+.ou-divisor::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 1px;
+  background: #e2e2ea;
+}
+
+.ou-divisor::before { left: 0; }
+.ou-divisor::after { right: 0; }
+
 /* ---------- Botões ---------- */
 .btn {
   display: block;

@@ -153,6 +153,85 @@ function renderizarLista() {
 }
 
 // =====================================================================
+// PARTE A.1 — LER ENDEREÇO DE UMA FOTO (OCR com Tesseract.js)
+// =====================================================================
+
+function mostrarOcrStatus(texto, ehErro = false) {
+  const s = el("ocr-status");
+  s.textContent = texto;
+  s.hidden = false;
+  s.classList.toggle("erro", ehErro);
+}
+
+// Tenta achar o endereço dentro do texto bruto lido da foto.
+// É uma heurística simples: vamos refiná-la com fotos reais.
+function extrairEndereco(textoBruto) {
+  const linhas = textoBruto
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  // Palavras que indicam o início de um logradouro
+  const regexRua = /\b(rua|r\.|av\.?|avenida|travessa|tv\.?|alameda|al\.?|estrada|rod\.?|rodovia|pra[cç]a|p[cç]\.?)\b/i;
+
+  const idxRua = linhas.findIndex((l) => regexRua.test(l));
+  if (idxRua === -1) return null; // não achamos nenhuma rua
+
+  const partes = [linhas[idxRua]];
+
+  // Se a linha da rua não tiver número, tenta pegar um número na linha seguinte
+  if (!/\d/.test(linhas[idxRua]) && linhas[idxRua + 1] && /\d/.test(linhas[idxRua + 1])) {
+    partes.push(linhas[idxRua + 1]);
+  }
+
+  // Procura um CEP (formato 00000-000) em qualquer lugar do texto
+  const cep = textoBruto.match(/\d{5}-?\d{3}/);
+  if (cep) partes.push(cep[0]);
+
+  return partes.join(", ");
+}
+
+async function lerFoto(arquivo) {
+  if (!arquivo) return;
+
+  if (typeof Tesseract === "undefined") {
+    mostrarOcrStatus("O leitor de fotos não carregou (precisa de internet). Tente recarregar a página.", true);
+    return;
+  }
+
+  el("ocr-bruto-box").hidden = true;
+  mostrarOcrStatus("🔎 Lendo a foto... (a 1ª vez baixa o idioma e demora um pouco mais)");
+
+  try {
+    const { data } = await Tesseract.recognize(arquivo, "por", {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          mostrarOcrStatus("🔎 Lendo a foto... " + Math.round(m.progress * 100) + "%");
+        }
+      },
+    });
+
+    const texto = (data.text || "").trim();
+
+    // Sempre mostra o texto completo lido (pra conferência/cópia manual)
+    el("ocr-bruto").textContent = texto || "(nada reconhecido)";
+    el("ocr-bruto-box").hidden = false;
+
+    const endereco = extrairEndereco(texto);
+    if (endereco) {
+      el("input-endereco").value = endereco;
+      el("input-endereco").focus();
+      mostrarOcrStatus('✅ Endereço lido! Confira/ajuste e clique em "Adicionar à lista".');
+    } else {
+      mostrarOcrStatus("⚠️ Não identifiquei o endereço sozinho. Veja o texto lido abaixo e preencha à mão.", true);
+    }
+  } catch (e) {
+    mostrarOcrStatus("Ops, não consegui ler essa foto. Tente outra imagem (mais nítida e reta).", true);
+    console.error(e);
+  }
+}
+
+// =====================================================================
 // PARTE B — GEOCODIFICAÇÃO (achar a latitude/longitude de um endereço)
 // =====================================================================
 
@@ -473,6 +552,13 @@ function iniciar() {
     el("input-endereco").value = "";
     el("input-complemento").value = "";
     el("input-endereco").focus();
+  });
+
+  // Leitura por foto (OCR)
+  el("input-foto").addEventListener("change", (evento) => {
+    const arquivo = evento.target.files && evento.target.files[0];
+    lerFoto(arquivo);
+    evento.target.value = ""; // permite reenviar a mesma foto depois
   });
 
   // Botão otimizar
