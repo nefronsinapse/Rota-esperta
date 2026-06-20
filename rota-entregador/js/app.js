@@ -471,7 +471,7 @@ async function otimizar() {
 
   // Validações básicas
   if (!enderecoLanchonete) {
-    mostrarStatus("Preencha o endereço da lanchonete primeiro.", true);
+    mostrarStatus("Preencha o ponto de partida primeiro.", true);
     return;
   }
   if (estado.entregas.length < 2) {
@@ -485,10 +485,10 @@ async function otimizar() {
 
   try {
     // 1) Geocodificar a lanchonete
-    mostrarStatus("🔎 Localizando a lanchonete...");
+    mostrarStatus("🔎 Localizando o ponto de partida...");
     const origem = await geocodificar(enderecoLanchonete, cidade);
     if (!origem) {
-      mostrarStatus("Não encontrei a lanchonete. Tente um endereço mais completo.", true);
+      mostrarStatus("Não encontrei o ponto de partida. Tente um endereço mais completo.", true);
       botao.disabled = false;
       return;
     }

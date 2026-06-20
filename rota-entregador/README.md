@@ -24,7 +24,8 @@ Um site (que abre no celular) onde o entregador:
 ## 🔄 Fluxo completo
 
 ```
-🏠 LANCHONETE (ponto de partida E de chegada)
+🏁 PONTO DE PARTIDA (de onde você sai hoje — varia por turno)
+   (também é o ponto de retorno: a rota fecha o círculo)
         ↓
 📷 Fotos das etiquetas
    • 1ª foto = entrega prioritária (a mais atrasada)
@@ -47,7 +48,7 @@ Um site (que abre no celular) onde o entregador:
 
 | Regra | Comportamento |
 |-------|---------------|
-| **Ponto de origem** | A lanchonete é o ponto fixo de partida **e** de chegada (rota fechada/circular). |
+| **Ponto de partida** | O endereço de onde o entregador sai naquele turno (não é fixo — muda conforme o trabalho). É também o ponto de retorno (rota fechada/circular). |
 | **Entrega prioritária** | Por padrão é a **1ª foto** enviada. Tem preferência para ser entregue mais cedo. |
 | **Prioridade flexível (conservadora)** | A prioritária só "fura a fila" se isso **não aumentar a rota em mais de ~5%**. Caso contrário, mantém a ordem mais eficiente (economia de combustível em primeiro lugar). |
 | **Complemento (AP/bloco)** | Guardado como observação, **não interfere** no cálculo da rota (o mapa usa só rua + número + bairro). Exibido na hora da entrega. |
