@@ -198,6 +198,7 @@ function extrairEndereco(textoBruto) {
     l
       .replace(/\s*(r\$|itens\s*do\s*pedido|entrega\s*pr|valor\s*unit|previs|revis[aã]o).*$/i, "")
       .replace(/["'\[\]{}()\\/|]+/g, " ")          // tira aspas, colchetes, parênteses, barras
+      .replace(/_/g, " ")                          // underscore costuma ser ruído de OCR
       .replace(/\s{2,}/g, " ")
       .replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g, "")    // tira pontuação solta nas pontas
       .trim();
@@ -235,10 +236,13 @@ function extrairEndereco(textoBruto) {
   // Detecta número da casa ausente ou inválido (ex.: ", 0")
   let aviso = "";
   const numero = rua.match(/,\s*(\d+)/) || rua.match(/(\d+)\s*$/);
+  const composto = bloco[0].match(/,\s*\d+\s*[_\-\/]\s*\d+/); // ex.: "360_43"
   if (!numero) {
     aviso = "Não identifiquei o número da casa — confirme com o cliente.";
   } else if (numero[1] === "0") {
     aviso = "O número da casa veio como 0 (provavelmente faltando) — confirme com o cliente.";
+  } else if (composto) {
+    aviso = "Confira o número da casa — pode ter apartamento/unidade junto.";
   }
 
   return { endereco: endereco.trim(), complemento, aviso };
