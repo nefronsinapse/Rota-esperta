@@ -234,7 +234,7 @@ function extrairEndereco(textoBruto) {
 
   // Detecta número da casa ausente ou inválido (ex.: ", 0")
   let aviso = "";
-  const numero = rua.match(/,\s*(\d+)\b/) || rua.match(/\b(\d+)\b\s*$/);
+  const numero = rua.match(/,\s*(\d+)/) || rua.match(/(\d+)\s*$/);
   if (!numero) {
     aviso = "Não identifiquei o número da casa — confirme com o cliente.";
   } else if (numero[1] === "0") {
