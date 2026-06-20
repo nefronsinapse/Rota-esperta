@@ -172,8 +172,12 @@ function extrairEndereco(textoBruto) {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // Procura o cabeçalho do bloco de entrega
-  const idxCab = linhas.findIndex((l) => /para\s+entrega/i.test(l));
+  // Procura o cabeçalho do bloco de entrega. Tolerante a erros de OCR: basta
+  // a palavra "entrega" (o trecho "ENTREGA:" costuma sobreviver mesmo quando
+  // "ENDEREÇO PARA" sai bagunçado). Ignora a linha "ENTREGA PRÓPRIA".
+  const idxCab = linhas.findIndex(
+    (l) => /entrega/i.test(l) && !/entrega\s*pr[oó]?pria/i.test(l)
+  );
   if (idxCab === -1) {
     return extrairPorPalavraChave(linhas, textoBruto); // plano B
   }
@@ -264,6 +268,60 @@ function extrairPorPalavraChave(linhas, textoBruto) {
   return { endereco: partes.join(", "), complemento: "", aviso: "" };
 }
 
+// Melhora a imagem antes do OCR: amplia fotos pequenas, converte para tons de
+// cinza e estica o contraste. Ajuda bastante em cupons térmicos / fotos
+// "médias". Se algo falhar, o chamador usa a imagem original.
+function preprocessarImagem(arquivo) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(arquivo);
+
+    img.onload = () => {
+      try {
+        const escala = Math.min(2.5, Math.max(1, 1600 / img.width));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * escala);
+        canvas.height = Math.round(img.height * escala);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const p = imgData.data;
+
+        // Tons de cinza + descobre o mais claro e o mais escuro
+        let min = 255, max = 0;
+        for (let i = 0; i < p.length; i += 4) {
+          const g = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+          p[i] = p[i + 1] = p[i + 2] = g;
+          if (g < min) min = g;
+          if (g > max) max = g;
+        }
+        // Estica o contraste (min..max -> 0..255)
+        const range = Math.max(1, max - min);
+        for (let i = 0; i < p.length; i += 4) {
+          const v = ((p[i] - min) / range) * 255;
+          p[i] = p[i + 1] = p[i + 2] = v;
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url);
+          blob ? resolve(blob) : reject(new Error("sem blob"));
+        }, "image/png");
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        reject(e);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("falha ao carregar imagem"));
+    };
+    img.src = url;
+  });
+}
+
 async function lerFoto(arquivo) {
   if (!arquivo) return;
 
@@ -273,10 +331,20 @@ async function lerFoto(arquivo) {
   }
 
   el("ocr-bruto-box").hidden = true;
-  mostrarOcrStatus("🔎 Lendo a foto... (a 1ª vez baixa o idioma e demora um pouco mais)");
+  mostrarOcrStatus("🔎 Preparando a imagem...");
 
   try {
-    const { data } = await Tesseract.recognize(arquivo, "por", {
+    // Trata a imagem (cinza + contraste + ampliação) antes de ler.
+    // Se falhar por algum motivo, segue com a foto original.
+    let entrada = arquivo;
+    try {
+      entrada = await preprocessarImagem(arquivo);
+    } catch (e) {
+      entrada = arquivo;
+    }
+
+    mostrarOcrStatus("🔎 Lendo a foto... (a 1ª vez baixa o idioma e demora um pouco mais)");
+    const { data } = await Tesseract.recognize(entrada, "por", {
       logger: (m) => {
         if (m.status === "recognizing text") {
           mostrarOcrStatus("🔎 Lendo a foto... " + Math.round(m.progress * 100) + "%");
