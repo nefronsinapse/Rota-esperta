@@ -462,6 +462,18 @@ function distancia(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// Centro geográfico de um conjunto de pontos. Usado como "âncora" para
+// ordenar a rota quando o ponto de partida não pôde ser localizado em
+// coordenadas (ex.: o usuário digitou o nome da lanchonete).
+function centroide(pontos) {
+  const n = pontos.length || 1;
+  const soma = pontos.reduce(
+    (acc, p) => ({ lat: acc.lat + p.lat, lng: acc.lng + p.lng }),
+    { lat: 0, lng: 0 }
+  );
+  return { lat: soma.lat / n, lng: soma.lng / n };
+}
+
 // Comprimento total de uma rota FECHADA: lanchonete -> entregas -> lanchonete
 function comprimentoRota(origem, entregas) {
   const pontos = [origem, ...entregas, origem];
@@ -540,15 +552,24 @@ function aplicarPrioridade(origem, rota, idPrioritaria) {
 // PARTE D — GERAR O LINK DO GOOGLE MAPS
 // =====================================================================
 
-function gerarLinkDoMaps(origem, entregasOrdenadas) {
-  const ponto = (p) => `${p.lat},${p.lng}`;
-  const paradas = entregasOrdenadas.map(ponto).join("|");
+function gerarLinkDoMaps(origemTexto, entregasOrdenadas, cidade) {
+  // Usa o ENDEREÇO ESCRITO (não a coordenada do OpenStreetMap). Assim quem
+  // localiza é o próprio Google Maps, que tem os números das casas com
+  // precisão. Também faz o ponto de partida por NOME funcionar.
+  const comCidade = (s) => {
+    let v = (s || "").trim();
+    if (cidade && !v.toLowerCase().includes(cidade.toLowerCase())) v += ", " + cidade;
+    return encodeURIComponent(v);
+  };
+
+  const origem = comCidade(origemTexto);
+  const paradas = entregasOrdenadas.map((e) => comCidade(e.endereco)).join("|");
 
   return (
     "https://www.google.com/maps/dir/?api=1" +
-    "&origin=" + ponto(origem) +
-    "&destination=" + ponto(origem) + // rota fechada: volta para a lanchonete
-    "&waypoints=" + encodeURIComponent(paradas) +
+    "&origin=" + origem +
+    "&destination=" + origem + // rota fechada: volta ao ponto de partida
+    "&waypoints=" + paradas +
     "&travelmode=driving"
   );
 }
@@ -583,14 +604,11 @@ async function otimizar() {
   el("cartao-resultado").hidden = true;
 
   try {
-    // 1) Geocodificar a lanchonete
+    // 1) Geocodificar o ponto de partida (só para ORDENAR a rota). Se não
+    // achar a coordenada (ex.: nome de lanchonete), seguimos mesmo assim:
+    // a navegação usa o texto e a ordenação usa o centro das entregas.
     mostrarStatus("🔎 Localizando o ponto de partida...");
     const origem = await geocodificar(enderecoLanchonete, cidade);
-    if (!origem) {
-      mostrarStatus("Não encontrei o ponto de partida. Tente um endereço mais completo.", true);
-      botao.disabled = false;
-      return;
-    }
 
     // 2) Geocodificar cada entrega (uma por vez, respeitando o limite)
     // Zera as coordenadas antes, para sempre recalcular do zero.
@@ -621,15 +639,17 @@ async function otimizar() {
       return;
     }
 
-    // 3) Otimizar a ordem
+    // 3) Otimizar a ordem. Âncora = ponto de partida, ou o centro das
+    // entregas se ele não pôde ser localizado em coordenadas.
     mostrarStatus("🧮 Calculando a melhor rota...");
+    const ancora = origem || centroide(validas);
     const idPrioritaria = estado.entregas[0].id; // a 1ª adicionada
-    let rota = vizinhoMaisProximo(origem, validas);
-    rota = melhorar2opt(origem, rota);
-    const resultado = aplicarPrioridade(origem, rota, idPrioritaria);
+    let rota = vizinhoMaisProximo(ancora, validas);
+    rota = melhorar2opt(ancora, rota);
+    const resultado = aplicarPrioridade(ancora, rota, idPrioritaria);
 
-    // 4) Mostrar o resultado
-    exibirResultado(origem, resultado.rota, idPrioritaria, resultado.priorizada, naoEncontrados);
+    // 4) Mostrar o resultado (a navegação usa o TEXTO do endereço)
+    exibirResultado(ancora, resultado.rota, idPrioritaria, resultado.priorizada, naoEncontrados, enderecoLanchonete, cidade);
     el("status").hidden = true;
   } catch (erro) {
     mostrarStatus("Ops, deu um problema ao consultar o mapa. Tente de novo em instantes.", true);
@@ -639,7 +659,7 @@ async function otimizar() {
   }
 }
 
-function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados) {
+function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados, origemTexto, cidade) {
   const km = comprimentoRota(origem, rota).toFixed(1);
 
   // Resumo
@@ -660,10 +680,7 @@ function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados
     const compl = entrega.complemento
       ? `<span class="compl">📝 ${entrega.complemento}</span>`
       : `<span class="compl">⚠️ sem complemento</span>`;
-    const aprox = entrega.aproximado
-      ? `<span class="compl">📍 local aproximado (rua, sem o número exato)</span>`
-      : "";
-    li.innerHTML = `${entrega.endereco}${tag}${compl}${aprox}`;
+    li.innerHTML = `${entrega.endereco}${tag}${compl}`;
     ol.appendChild(li);
   });
 
