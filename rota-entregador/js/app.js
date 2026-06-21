@@ -172,6 +172,102 @@ function extrairEndereco(textoBruto) {
     .map((l) => l.trim())
     .filter(Boolean);
 
+  // Formato com RÓTULOS (Endereco:/Comp:/Bairro:/Cidade:/Ref:). Detecta pela
+  // presença de "Bairro:" ou "Cidade:".
+  if (/bairro\s*:/i.test(textoBruto) || /cidade\s*:/i.test(textoBruto)) {
+    const r = extrairPorRotulos(linhas);
+    if (r && r.endereco) return r;
+  }
+
+  // Formato em BLOCO "ENDEREÇO PARA ENTREGA" (uma linha por campo).
+  if (linhas.some((l) => /entrega/i.test(l) && !/entrega\s*pr[oó]?pria/i.test(l))) {
+    const r = extrairBloco(textoBruto);
+    if (r && r.endereco) return r;
+  }
+
+  // Último recurso: procura uma linha que pareça logradouro.
+  return extrairPorPalavraChave(linhas, textoBruto);
+}
+
+// Lê o formato com RÓTULOS. Junta palavras quebradas entre linhas (ex.:
+// "Sou" + "za" -> "Souza") e separa os campos pelos rótulos.
+function extrairPorRotulos(linhas) {
+  // Reconstrói o texto: se a próxima linha começa com letra minúscula, é
+  // continuação de palavra quebrada (cola sem espaço); senão, é palavra ou
+  // rótulo novo (junta com espaço).
+  let texto = "";
+  linhas.forEach((l, i) => {
+    if (i === 0) { texto = l; return; }
+    texto += /^\p{Ll}/u.test(l) ? l : " " + l;
+  });
+
+  const rotulos = [
+    { chave: "endereco", re: /endere[çc]o\s+para\s+entrega\s*:?|endere[çc]o\s*:|entrega\s*:/i },
+    { chave: "comp", re: /comp(?:lemento)?\s*:/i },
+    { chave: "ref", re: /ref(?:er[êe]ncia)?\s*:/i },
+    { chave: "bairro", re: /bairro\s*:/i },
+    { chave: "cidade", re: /cidade\s*:/i },
+    { chave: "cep", re: /cep\s*:/i },
+  ];
+
+  const marcas = [];
+  rotulos.forEach((r) => {
+    const m = texto.match(r.re);
+    if (m) marcas.push({ chave: r.chave, inicio: m.index, fim: m.index + m[0].length });
+  });
+  if (!marcas.length) return null;
+  marcas.sort((a, b) => a.inicio - b.inicio);
+
+  // Onde cortar o último campo (pra não engolir itens/valores do cupom)
+  const terminador = /previs|entrega\s*pr[oó]?pria|itens\s*do\s*pedido|valor\s*unit|formas?\s*de\s*pagamento|r\$/i;
+
+  const campos = {};
+  marcas.forEach((marca, i) => {
+    const fim = i + 1 < marcas.length ? marcas[i + 1].inicio : texto.length;
+    let valor = texto.slice(marca.fim, fim);
+    const t = valor.match(terminador);
+    if (t) valor = valor.slice(0, t.index);
+    if (!(marca.chave in campos)) campos[marca.chave] = valor;
+  });
+
+  const limparCampo = (s) =>
+    (s || "")
+      .replace(/["'\[\]{}()\\/|]+/g, " ")
+      .replace(/\bn[º°o]\.?\s+(?=\d)/gi, "")  // remove "Nº " antes do número
+      .replace(/_/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/^[\s,.\-:;]+|[\s,.\-:;]+$/g, "")
+      .trim();
+
+  const ruaNum = limparCampo(campos.endereco);
+  if (!ruaNum) return null;
+
+  const comp = limparCampo(campos.comp);
+  const ref = limparCampo(campos.ref);
+  const complemento = [comp, ref].filter(Boolean).join(" · ");
+
+  const bairro = limparCampo(campos.bairro);
+  const cidade = limparCampo(campos.cidade).replace(/\s[-–]\s/g, ", "); // "Maringa - PR" -> "Maringa, PR"
+
+  const endereco = [ruaNum, bairro, cidade].filter(Boolean).join(", ");
+
+  let aviso = "";
+  const numero = ruaNum.match(/,\s*(\d+)/) || ruaNum.match(/(\d+)\s*$/);
+  const composto = ruaNum.match(/,\s*\d+\s*[_\-\/]\s*\d+/);
+  if (!numero) aviso = "Não identifiquei o número da casa — confirme com o cliente.";
+  else if (numero[1] === "0") aviso = "O número da casa veio como 0 (provavelmente faltando) — confirme com o cliente.";
+  else if (composto) aviso = "Confira o número da casa — pode ter apartamento/unidade junto.";
+
+  return { endereco, complemento, aviso };
+}
+
+// Lê o formato em BLOCO ("ENDEREÇO PARA ENTREGA" + uma linha por campo).
+function extrairBloco(textoBruto) {
+  const linhas = textoBruto
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   // Procura o cabeçalho do bloco de entrega. Tolerante a erros de OCR: basta
   // a palavra "entrega" (o trecho "ENTREGA:" costuma sobreviver mesmo quando
   // "ENDEREÇO PARA" sai bagunçado). Ignora a linha "ENTREGA PRÓPRIA".
