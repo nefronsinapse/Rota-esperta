@@ -670,6 +670,13 @@ function gerarLinkDoMaps(origemTexto, entregasOrdenadas, cidade) {
   );
 }
 
+// Link de navegação direta no Waze (usado quando há só 1 entrega).
+function gerarLinkWaze(endereco, cidade) {
+  let v = (endereco || "").trim();
+  if (cidade && !v.toLowerCase().includes(cidade.toLowerCase())) v += ", " + cidade;
+  return "https://waze.com/ul?q=" + encodeURIComponent(v) + "&navigate=yes";
+}
+
 // =====================================================================
 // PARTE E — O BOTÃO "OTIMIZAR" JUNTA TUDO
 // =====================================================================
@@ -685,13 +692,21 @@ async function otimizar() {
   const enderecoLanchonete = el("input-lanchonete").value.trim();
   const cidade = el("input-cidade").value.trim();
 
-  // Validações básicas
-  if (!enderecoLanchonete) {
-    mostrarStatus("Preencha o ponto de partida primeiro.", true);
+  const total = estado.entregas.length;
+  if (total === 0) {
+    mostrarStatus("Adicione pelo menos 1 entrega.", true);
     return;
   }
-  if (estado.entregas.length < 2) {
-    mostrarStatus("Adicione pelo menos 2 entregas para otimizar.", true);
+
+  // 1 entrega: navegação direta no Waze (sem otimizar nem ponto de partida).
+  if (total === 1) {
+    exibirResultadoUnico(estado.entregas[0], cidade);
+    return;
+  }
+
+  // 2+ entregas: precisa do ponto de partida para fechar a rota.
+  if (!enderecoLanchonete) {
+    mostrarStatus("Preencha o ponto de partida primeiro.", true);
     return;
   }
 
@@ -713,7 +728,6 @@ async function otimizar() {
       e.lng = null;
       e.aproximado = false;
     });
-    const naoEncontrados = [];
     for (let i = 0; i < estado.entregas.length; i++) {
       const entrega = estado.entregas[i];
       mostrarStatus(`🔎 Localizando endereços... (${i + 1}/${estado.entregas.length})`);
@@ -722,30 +736,33 @@ async function otimizar() {
       if (coord) {
         entrega.lat = coord.lat;
         entrega.lng = coord.lng;
-        entrega.aproximado = !!coord.aproximado;
-      } else {
-        naoEncontrados.push(entrega.endereco);
       }
     }
 
-    const validas = estado.entregas.filter((e) => e.lat !== null);
-    if (validas.length < 2) {
-      mostrarStatus("Não consegui localizar endereços suficientes. Verifique o que foi digitado.", true);
-      botao.disabled = false;
-      return;
+    // 3) Ordenar. Se ao menos 2 entregas têm coordenada, otimiza; as demais
+    // entram no fim (o Google ainda navega por elas, via texto). Assim a rota
+    // nunca falha por causa de um endereço que o OpenStreetMap não achou.
+    mostrarStatus("🧮 Calculando a melhor rota...");
+    const idPrioritaria = estado.entregas[0].id; // a 1ª adicionada
+    const comCoord = estado.entregas.filter((e) => e.lat !== null);
+    const semCoord = estado.entregas.filter((e) => e.lat === null);
+
+    let rotaFinal;
+    let priorizada = false;
+    let ancora = null;
+    if (comCoord.length >= 2) {
+      ancora = origem || centroide(comCoord);
+      let rota = vizinhoMaisProximo(ancora, comCoord);
+      rota = melhorar2opt(ancora, rota);
+      const resultado = aplicarPrioridade(ancora, rota, idPrioritaria);
+      rotaFinal = resultado.rota.concat(semCoord);
+      priorizada = resultado.priorizada;
+    } else {
+      rotaFinal = estado.entregas.slice(); // ordem em que foram adicionadas
     }
 
-    // 3) Otimizar a ordem. Âncora = ponto de partida, ou o centro das
-    // entregas se ele não pôde ser localizado em coordenadas.
-    mostrarStatus("🧮 Calculando a melhor rota...");
-    const ancora = origem || centroide(validas);
-    const idPrioritaria = estado.entregas[0].id; // a 1ª adicionada
-    let rota = vizinhoMaisProximo(ancora, validas);
-    rota = melhorar2opt(ancora, rota);
-    const resultado = aplicarPrioridade(ancora, rota, idPrioritaria);
-
     // 4) Mostrar o resultado (a navegação usa o TEXTO do endereço)
-    exibirResultado(ancora, resultado.rota, idPrioritaria, resultado.priorizada, naoEncontrados, enderecoLanchonete, cidade);
+    exibirResultado(ancora, rotaFinal, idPrioritaria, priorizada, semCoord.map((e) => e.endereco), enderecoLanchonete, cidade);
     el("status").hidden = true;
   } catch (erro) {
     mostrarStatus("Ops, deu um problema ao consultar o mapa. Tente de novo em instantes.", true);
@@ -755,15 +772,18 @@ async function otimizar() {
   }
 }
 
-function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados, origemTexto, cidade) {
-  const km = comprimentoRota(origem, rota).toFixed(1);
-
-  // Resumo
-  let resumo = `Distância total (ida e volta): ~${km} km · ${rota.length} paradas.`;
-  if (priorizada) {
-    resumo += " ⭐ A prioritária foi adiantada (cabia dentro do limite).";
+function exibirResultado(ancora, rota, idPrioritaria, priorizada, naoOrdenados, origemTexto, cidade) {
+  // Só estima a distância quando dá para medir todos os pontos.
+  const podeMedir = ancora && rota.every((e) => e.lat != null);
+  let resumo;
+  if (podeMedir) {
+    const km = comprimentoRota(ancora, rota).toFixed(1);
+    resumo = `Distância total (ida e volta): ~${km} km · ${rota.length} paradas.`;
+    resumo += priorizada
+      ? " ⭐ A prioritária foi adiantada (cabia dentro do limite)."
+      : " A prioritária ficou na ordem eficiente.";
   } else {
-    resumo += " A prioritária ficou na ordem eficiente (adiantar sairia caro).";
+    resumo = `${rota.length} paradas na rota.`;
   }
   el("resumo-rota").textContent = resumo;
 
@@ -780,22 +800,46 @@ function exibirResultado(origem, rota, idPrioritaria, priorizada, naoEncontrados
     ol.appendChild(li);
   });
 
-  // Link do Maps
-  el("link-maps").href = gerarLinkDoMaps(origem, rota);
+  // Botão do Google Maps (usa o TEXTO dos endereços, para o número ser preciso)
+  const link = el("link-maps");
+  link.href = gerarLinkDoMaps(origemTexto, rota, cidade);
+  link.textContent = "🚀 Abrir rota no Google Maps";
 
-  // Aviso PERSISTENTE de endereços não localizados (fica dentro do resultado)
+  // Aviso: endereços que não consegui ordenar (entraram na ordem adicionada)
   const aviso = el("aviso-drops");
-  if (naoEncontrados.length) {
+  if (naoOrdenados && naoOrdenados.length) {
     aviso.innerHTML =
-      `⚠️ <strong>${naoEncontrados.length} endereço(s) não localizado(s)</strong> — ` +
-      "ficaram de fora da rota:<br>• " +
-      naoEncontrados.join("<br>• ") +
-      "<br><br>Confira a escrita (rua, número, bairro) e a cidade base, depois otimize de novo.";
+      `ℹ️ <strong>${naoOrdenados.length} endereço(s)</strong> eu não localizei para ordenar, ` +
+      "então entraram na ordem em que você adicionou (o Google Maps ainda navega por eles):<br>• " +
+      naoOrdenados.join("<br>• ");
     aviso.hidden = false;
   } else {
     aviso.hidden = true;
   }
 
+  el("cartao-resultado").hidden = false;
+  el("cartao-resultado").scrollIntoView({ behavior: "smooth" });
+}
+
+// Resultado quando há só 1 entrega: navegação direta no Waze.
+function exibirResultadoUnico(entrega, cidade) {
+  el("resumo-rota").textContent = "1 entrega — toque para navegar direto no Waze. 🟦";
+
+  const ol = el("resultado-ordem");
+  ol.innerHTML = "";
+  const li = document.createElement("li");
+  const compl = entrega.complemento
+    ? `<span class="compl">📝 ${entrega.complemento}</span>`
+    : `<span class="compl">⚠️ sem complemento</span>`;
+  li.innerHTML = `${entrega.endereco}${compl}`;
+  ol.appendChild(li);
+
+  const link = el("link-maps");
+  link.href = gerarLinkWaze(entrega.endereco, cidade);
+  link.textContent = "🟦 Abrir no Waze";
+
+  el("aviso-drops").hidden = true;
+  el("status").hidden = true;
   el("cartao-resultado").hidden = false;
   el("cartao-resultado").scrollIntoView({ behavior: "smooth" });
 }
